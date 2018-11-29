@@ -133,6 +133,43 @@ func (sk *SkipList) Insert(val string) bool {
     return true
 }
 
+func (sk *SkipList) Find(val string) *Node {
+    // sk is empty
+    if sk.size == 0 {
+        return nil
+    }
+
+    // sk is not empty
+    level := sk.top
+    pPreNode := &sk.head[level]
+    for {
+        pCurNode := pPreNode.next
+        if pCurNode == nil {
+            if level > 0 {
+                pPreNode= pPreNode.bottom
+                level--
+                continue
+            } else {
+                return nil
+            }
+        }
+        if val == pCurNode.k.(string) {
+            return pCurNode
+        } else if val > pCurNode.k.(string) {
+            pPreNode = pCurNode
+        } else {
+            if level > 0 {
+                pPreNode= pPreNode.bottom
+                level--
+                continue
+            } else {
+                return nil
+            }
+        }
+    }
+    return nil // never reach
+}
+
 func (sk *SkipList) Show() {
     fmt.Printf("skip list size = %v\n", sk.size)
 
@@ -164,4 +201,10 @@ func main() {
     sk.Insert("7")
     sk.Insert("10")
     sk.Show()
+
+    fmt.Println(sk.Find("100"))
+    fmt.Println(sk.Find("1000"))
+    fmt.Println(sk.Find("-9"))
+    fmt.Println(sk.Find("18"))
+    fmt.Println(sk.Find("-100"))
 }
