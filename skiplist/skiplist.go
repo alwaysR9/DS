@@ -25,8 +25,9 @@ import "math/rand"
 
 type Node struct {
     k interface{}
-    next   *Node  // nil for last node
-    bottom *Node  // nil for last node
+    next   *Node  // nil for the last node
+    pre    *Node  // nil for the first node, only convenient for delete op
+    bottom *Node  // nil for the last node
 }
 
 type SkipList struct {
@@ -47,9 +48,9 @@ func Create(nLevel int) *SkipList {
     sk.head = make([]Node, nLevel)
     sk.top = 0
     sk.size = 0
-    sk.head[0] = Node{"X", nil, nil}
+    sk.head[0] = Node{"X", nil, nil, nil}
     for i := 1; i < sk.nLevel; i++ {
-        sk.head[i] = Node{"X", nil, &sk.head[i-1]}
+        sk.head[i] = Node{"X", nil, nil, &sk.head[i-1]}
     }
     return &sk
 }
@@ -57,12 +58,12 @@ func Create(nLevel int) *SkipList {
 func (sk *SkipList) Insert(val string) bool {
     // sk is empty
     if sk.head[sk.top].next == nil {
-        sk.head[0].next = &Node{val, nil, nil}
+        sk.head[0].next = &Node{val, nil, &sk.head[0], nil}
         for i := 1; i < sk.nLevel; i++ {
             if IsNeedHighLevel() == false {
                 break
             }
-            sk.head[i].next = &Node{val, nil, sk.head[i-1].next}
+            sk.head[i].next = &Node{val, nil, &sk.head[i], sk.head[i-1].next}
             if i > sk.top {
                 sk.top = i
             }
@@ -116,14 +117,21 @@ func (sk *SkipList) Insert(val string) bool {
     }
 
     // insert from lower level
-    pNode := &Node{val, insertPos[0].next, nil}
+    pNode := &Node{val, insertPos[0].next, insertPos[0], nil}
+    if insertPos[0].next != nil {
+        insertPos[0].next.pre = pNode
+    }
     insertPos[0].next = pNode
+
 
     for i := 1; i < sk.nLevel; i++ {
         if IsNeedHighLevel() == false {
             break
         }
-        pNode = &Node{val, insertPos[i].next, pNode}
+        pNode = &Node{val, insertPos[i].next, insertPos[i], pNode}
+        if insertPos[i].next != nil {
+            insertPos[i].next.pre = pNode
+        }
         insertPos[i].next = pNode
         if i > sk.top {
             sk.top = i
