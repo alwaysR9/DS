@@ -8,19 +8,6 @@ import "math/rand"
 *  X------------------>17      level 2 <- top
 *  X---->8------------>17->31  level 1
 *  X->3->8->9->13->16->17->31  level 0
-*
-*  lookup: 100
-*  lookup: 17
-*  lookup: 8
-*  lookup: 16
-*
-*  insert: 8
-*  insert: 10
-*  insert: 32
-*  
-*  delete: 100
-*  delete: 8
-*  delete: 16
 */
 
 type Node struct {
@@ -32,9 +19,9 @@ type Node struct {
 
 type SkipList struct {
     nLevel int
-    top    int // top level
+    top    int  // top level, point to the topest non-empty sub-list 
     head   []Node
-    size   int
+    size   []int  // size at each level 
 }
 
 func IsNeedHighLevel() bool {
@@ -46,29 +33,35 @@ func Create(nLevel int) *SkipList {
     sk := SkipList{}
     sk.nLevel =nLevel
     sk.head = make([]Node, nLevel)
-    sk.top = 0
-    sk.size = 0
     sk.head[0] = Node{"X", nil, nil, nil}
     for i := 1; i < sk.nLevel; i++ {
         sk.head[i] = Node{"X", nil, nil, &sk.head[i-1]}
     }
+    sk.top = -1
+    sk.size = make([]int, nLevel)
     return &sk
 }
 
 func (sk *SkipList) Insert(val string) bool {
+    // top pointer is invalid
+    if sk.top < -1 {
+        fmt.Printf("[Insert()] ERROR top level = %v\n", sk.top)
+        return false
+    }
+
     // sk is empty
-    if sk.head[sk.top].next == nil {
+    if sk.top == -1 {
+        sk.top = 0
+        sk.size[0] = 1
         sk.head[0].next = &Node{val, nil, &sk.head[0], nil}
         for i := 1; i < sk.nLevel; i++ {
             if IsNeedHighLevel() == false {
                 break
             }
             sk.head[i].next = &Node{val, nil, &sk.head[i], sk.head[i-1].next}
-            if i > sk.top {
-                sk.top = i
-            }
+            sk.top = i
+            sk.size[i] ++
         }
-        sk.size = 1
         return true
     }
 
@@ -83,36 +76,30 @@ func (sk *SkipList) Insert(val string) bool {
 
     for {
         pCurNode := pPreNode.next
-        // val > pPreNode.k, move to next level
         if pCurNode == nil {
             insertPos[level] = pPreNode
             if level > 0 {
                 pPreNode = pPreNode.bottom
-                level--
+                level --
+                continue
             } else {
                 break
             }
-            continue
         }
-        // val already in skip list
         if pCurNode.k.(string) == val {
             return false
-        }
-        // val < cur.k, move to next level
-        if val < pCurNode.k.(string) {
+        } else if val > pCurNode.k.(string) {
+            pPreNode = pCurNode
+            pCurNode = pCurNode.next
+        } else {
             insertPos[level] = pPreNode
             if level > 0 {
                 pPreNode = pPreNode.bottom
-                level--
+                level --
+                continue
             } else {
                 break
             }
-            continue
-        }
-        // val > cur.k
-        if val > pCurNode.k.(string) {
-            pPreNode = pCurNode
-            pCurNode = pCurNode.next
         }
     }
 
@@ -122,7 +109,7 @@ func (sk *SkipList) Insert(val string) bool {
         insertPos[0].next.pre = pNode
     }
     insertPos[0].next = pNode
-
+    sk.size[0] ++
 
     for i := 1; i < sk.nLevel; i++ {
         if IsNeedHighLevel() == false {
@@ -136,15 +123,22 @@ func (sk *SkipList) Insert(val string) bool {
         if i > sk.top {
             sk.top = i
         }
+        sk.size[i] ++
     }
-    sk.size ++
     return true
 }
 
-func (sk *SkipList) Find(val string) *Node {
+// return (*Node, level)
+func (sk *SkipList) Find(val string) (*Node, int) {
+    // top pointer is invalid
+    if sk.top < -1 {
+        fmt.Printf("[Find()] ERROR top level = %v\n", sk.top)
+        return nil, -1
+    }
+
     // sk is empty
-    if sk.size == 0 {
-        return nil
+    if sk.top == -1 {
+        return nil, -1
     }
 
     // sk is not empty
@@ -158,11 +152,11 @@ func (sk *SkipList) Find(val string) *Node {
                 level--
                 continue
             } else {
-                return nil
+                return nil, -1
             }
         }
         if val == pCurNode.k.(string) {
-            return pCurNode
+            return pCurNode, level
         } else if val > pCurNode.k.(string) {
             pPreNode = pCurNode
         } else {
@@ -171,18 +165,50 @@ func (sk *SkipList) Find(val string) *Node {
                 level--
                 continue
             } else {
-                return nil
+                return nil, -1
             }
         }
     }
-    return nil // never reach
+    return nil, -1 // never reach
+}
+
+func (sk *SkipList) Delete(val string) bool {
+    node, level := sk.Find(val)  // node at top level
+    if node == nil {
+        return false
+    }
+
+    for {
+        pPreNode := node.pre
+        pPostNode := node.next
+
+        pPreNode.next = pPostNode
+        if pPostNode != nil {
+            pPostNode.pre = pPreNode
+        }
+
+        sk.size[level] --
+        if sk.size[level] == 0 {
+            sk.top --
+        }
+
+        // delete this node, move to lower level
+        if node.bottom != nil {
+            node = node.bottom
+            level --
+        } else {
+            node = nil
+            break
+        }
+    }
+    return true
 }
 
 func (sk *SkipList) Show() {
-    fmt.Printf("skip list size = %v\n", sk.size)
+    fmt.Printf("skip list top = %v\n", sk.top)
 
     for i := 0; i <= sk.top; i++ {
-        fmt.Printf("Level: %v\n", i)
+        fmt.Printf("Level: %v, size: %v\n", i, sk.size[i])
         pCurNode := &sk.head[i]
         for pCurNode != nil {
             fmt.Printf("%v ", pCurNode.k.(string))
@@ -194,7 +220,9 @@ func (sk *SkipList) Show() {
 
 func main() {
     rand.Seed(time.Now().UnixNano())
-    sk := Create(4)
+    sk := Create(10)
+
+    fmt.Println("===== Insert: =====")
     sk.Insert("1")
     sk.Insert("2")
     sk.Insert("7")
@@ -210,9 +238,28 @@ func main() {
     sk.Insert("10")
     sk.Show()
 
+    fmt.Println("===== Find: =====")
     fmt.Println(sk.Find("100"))
     fmt.Println(sk.Find("1000"))
     fmt.Println(sk.Find("-9"))
     fmt.Println(sk.Find("18"))
     fmt.Println(sk.Find("-100"))
+
+    fmt.Println("===== Delete: =====")
+    sk.Delete("18")
+    sk.Delete("1")
+    sk.Delete("-1")
+    sk.Delete("-9")
+    sk.Delete("1000")
+    sk.Show()
+
+    fmt.Println("===== Insert: =====")
+    sk.Insert("-10")
+    sk.Insert("9")
+    sk.Insert("61")
+    sk.Insert("13")
+    sk.Insert("100")
+    sk.Insert("17")
+    sk.Insert("8")
+    sk.Show()
 }
